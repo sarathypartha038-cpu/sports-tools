@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <title>Golf European Tour Score Compare Tool</title>
 
+<!-- Firebase v8 SDK -->
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 
@@ -95,12 +96,12 @@ td{ padding:6px; border:1px solid #ccc; text-align:center; }
 <script>
 /* ================= FIREBASE INITIALIZATION ================= */
 const firebaseConfig = {
-  apiKey: "AIzaSyBGyylXEUMC7bOHpHu0mMjBxGdehk6OT1E",
-  authDomain: "sports-tools-fc26c.firebaseapp.com",
-  projectId: "sports-tools-fc26c",
-  storageBucket: "sports-tools-fc26c.firebasestorage.app",
-  messagingSenderId: "730294504124",
-  appId: "1:730294504124:web:67aec0314f9627db745eb9"
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT.firebasestorage.app",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
 };
 
 firebase.initializeApp(firebaseConfig);
@@ -108,19 +109,20 @@ const db = firebase.firestore();
 
 let loadedMappings = {};
 
-async function loadMappingsFromFirestore() {
-  try {
-    const snapshot = await db.collection("playerMappings").get();
-    loadedMappings = {};
-    snapshot.forEach(doc => {
-      const data = doc.data();
-      if (data.officialName && data.rs3Name) {
-        loadedMappings[data.officialName] = data.rs3Name;
-      }
-    });
-  } catch (e) {
-    console.error("Error loading mappings: ", e);
-  }
+async function loadMappingsFromFirestore(){
+    try {
+        const snapshot = await db.collection("playerMappings").get();
+        loadedMappings = {};
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            if(data && data.rs3Name){
+                loadedMappings[doc.id] = data.rs3Name;
+            }
+        });
+        console.log("Firestore loaded:", loadedMappings);
+    } catch(err) {
+        console.error("Error loading mappings from Firestore:", err);
+    }
 }
 
 /* ================= LOGIN ================= */
@@ -135,12 +137,12 @@ function doLogin(){
 function logout(){ localStorage.removeItem("golfAuth"); location.reload(); }
 
 window.onload= async ()=>{
-    await loadMappingsFromFirestore();
     if(localStorage.getItem("golfAuth")==="1"){
         loginBox.style.display="none";
         main.style.display="block";
         logoutBtn.style.display="block";
     }
+    await loadMappingsFromFirestore();
 };
 
 /* ================= CLEAR ================= */
@@ -277,7 +279,7 @@ let lastOFF = null;
 let lastRS3 = null;
 
 function getMappings(){
- return loadedMappings;
+    return loadedMappings;
 }
 
 function openPlayerMapping(){
@@ -349,7 +351,7 @@ function openPlayerMapping(){
 
 
 function manageMappings(){
-    const mappings = getMappings();
+    const mappings = loadedMappings;
 
     let rows = "";
     Object.keys(mappings).forEach(key=>{
@@ -379,42 +381,43 @@ function manageMappings(){
 
 async function saveManagedMappings(){
     const inputs = document.querySelectorAll('#manageMapPopup input[data-key]');
-    for (const inp of inputs) {
-        const key = inp.dataset.key;
+    const batch = db.batch();
+    inputs.forEach(inp=>{
+        const docId = inp.dataset.key;
         const val = inp.value.trim();
         if(val){
-            loadedMappings[key] = val;
-            await db.collection("playerMappings").doc(key).set({
-                officialName: key,
-                rs3Name: val
-            });
+            const ref = db.collection("playerMappings").doc(docId);
+            batch.set(ref, { officialName: docId, rs3Name: val });
         }
-    }
+    });
+    await batch.commit();
+    await loadMappingsFromFirestore();
     alert("Mappings updated");
     document.getElementById('manageMapPopup').remove();
-    await loadMappingsFromFirestore();
 }
 
 async function deleteMapping(key){
-    delete loadedMappings[key];
     await db.collection("playerMappings").doc(key).delete();
+    await loadMappingsFromFirestore();
     document.getElementById('manageMapPopup').remove();
     manageMappings();
 }
 
 async function saveMappings(){
  const selects = document.querySelectorAll('#mapPopup select');
- for (const s of selects) {
+ const batch = db.batch();
+ selects.forEach(s=>{
    if(s.value){
-      const offKey = normalizeOrder(s.dataset.official);
-      const rs3Val = s.value;
-      loadedMappings[offKey] = rs3Val;
-      await db.collection("playerMappings").doc(offKey).set({
-    officialName: s.dataset.official,
-    rs3Name: rs3Val
-});
+      const normName = normalizeOrder(s.dataset.official);
+      const ref = db.collection("playerMappings").doc(normName);
+      batch.set(ref, {
+         officialName: normName,
+         rs3Name: s.value
+      });
    }
- }
+ });
+ await batch.commit();
+ await loadMappingsFromFirestore();
  document.getElementById('mapPopup').remove();
  compare();
 }
