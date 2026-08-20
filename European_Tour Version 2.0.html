@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Golf PGA Champion and Korn Ferry Score Comparator</title>
+<title>Golf DP World / European Tour Score Comparator</title>
 
 <!-- Firebase v8 CDN SDKs -->
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
@@ -61,7 +61,7 @@ td{padding:6px;border:1px solid #ccc;text-align:center;}
 </div>
 
 <div id="main" style="display:none;">
-<h1>Golf PGA Champion and Korn Ferry Score Comparator</h1>
+<h1>Golf DP World / European Tour Score Comparator</h1>
 
 <div class="wrap">
 <button onclick="clearOfficial()" class="clearBtn">Clear Official</button>
@@ -69,11 +69,13 @@ td{padding:6px;border:1px solid #ccc;text-align:center;}
 <button onclick="clearRS3()" class="clearBtn">Clear RS3</button>
 
 <div class="flex">
-<textarea id="official" placeholder="Paste OFFICIAL Excel (TAB separated)"></textarea>
+<textarea id="official" placeholder="Paste DP World / European / Challenge Tour Excel (TAB separated)"></textarea>
 <textarea id="rs3" placeholder="Paste RS3 Excel (TAB separated)"></textarea>
 </div>
 
-<button onclick="compare()">COMPARE</button> <button onclick="openPlayerMapping()">🗺 PLAYER MAPPING</button> <button onclick="openManageMappings()">⚙ MANAGE MAPPINGS</button>
+<button onclick="compare()">COMPARE</button> 
+<button onclick="openPlayerMapping()">🗺 PLAYER MAPPING</button> 
+<button onclick="openManageMappings()">⚙ MANAGE MAPPINGS</button>
 <div id="output"></div>
 </div>
 </div>
@@ -161,11 +163,25 @@ function normalizeNameKey(name){
         .replace(/[\u0300-\u036f]/g,"")
         .toLowerCase()
         .replace(/[().]/g,"")
-        .replace(/[^a-z\s]/g," ")
+        .replace(/[^a-z\s,]/g," ")
         .replace(/\s+/g," ")
         .trim();
 
-    let parts=s.split(" ");
+    // Handle "LASTNAME, Firstname" format (e.g., SOUTHGATE, Matthew or ZHOU, Yanhan)
+    if(s.includes(",")){
+        let parts = s.split(",");
+        let last = parts[0].trim();
+        let first = parts[1].trim();
+        if(last && first){
+            let firstParts = first.split(" ").filter(Boolean);
+            let initials = firstParts.map(p => p[0]).join("");
+            let lastParts = last.split(" ").filter(Boolean);
+            return lastParts[0] + "_" + initials;
+        }
+    }
+
+    // Handle standard "Firstname Lastname" format
+    let parts=s.replace(/,/g,"").split(" ").filter(Boolean);
     const suffixes=["jr","sr","ii","iii","iv"];
     while(parts.length && suffixes.includes(parts[parts.length-1])) parts.pop();
     if(parts.length<2) return "";
@@ -198,8 +214,10 @@ function parseRS3(text){
     for(const line of lines){
         const c=splitRowStrict(line,"RS3");
         if(!/^\d+$/.test(c[0])) continue;
-        const name=c[1]?.trim();
-        if(!name) continue;
+        
+        const rawName = c[1]?.trim();
+        if(!rawName) continue;
+        const name = rawName.split("\t")[0].trim();
 
         const holes=c.slice(8,26).map(cellToHole);
         while(holes.length<18) holes.push(null);
@@ -209,31 +227,77 @@ function parseRS3(text){
     return players;
 }
 
-/* ================= OFFICIAL PARSER ================= */
+/* ================= EUROPEAN TOUR OFFICIAL PARSER ================= */
 function parseOfficial(text){
     const lines=text.split(/\n/).map(l=>l.replace(/\u200B/g,"")).filter(l=>l.trim());
     const players={};
 
-    for(let i=0;i<lines.length-1;i++){
-        const c=splitRowStrict(lines[i],"OFFICIAL");
-        if(!/^(T?\d+|-|\d+|E)$/.test(c[0]?.trim())) continue;
+    for(let i=0; i<lines.length; i++){
+        const c=splitRowStrict(lines[i], "EUROPEAN OFFICIAL");
+        
+        // Row indicator: Position (e.g., 1, T10, CUT, WD, DQ, -)
+        if(!/^(T?\d+|-|\d+|E|CUT|WD|DQ)$/i.test(c[0]?.trim())) continue;
 
-        let holes=[];
-        for(let x=3;x<=11;x++) holes.push(cellToHole(c[x]));
-        for(let x=13;x<=21;x++) holes.push(cellToHole(c[x]));
+        // Dynamic detection of player name cell (checking columns 1 through 4)
+        let cleanName = "";
+        let nameColIdx = -1;
 
-        while(holes.length<18) holes.push(null);
+        for(let col = 1; col < Math.min(c.length, 5); col++){
+            let cell = c[col]?.trim();
+            if(!cell) continue;
+            
+            // Clean out country code suffixes like (ENG), (ESP), (CHN)
+            cell = cell.replace(/\([A-Z]{2,4}\)/gi, "").trim();
 
-        const name=lines[i+1].trim();
-        players[name]={name,holes,key:normalizeNameKey(name)};
-        i++;
+            // Ignore scores, ranks, and short status values
+            if(cell && !/^-?\d+$/.test(cell) && !/^(T?\d+|E|CUT|WD|DQ|\+|-)$/i.test(cell) && cell.length > 2){
+                cleanName = cell.split("\t")[0].trim();
+                nameColIdx = col;
+                break;
+            }
+        }
+
+        // Multi-line support if player name sits on the subsequent row
+        if(!cleanName && i + 1 < lines.length){
+            const nextCols = splitRowStrict(lines[i+1], "EUROPEAN OFFICIAL");
+            for(let col = 0; col < Math.min(nextCols.length, 3); col++){
+                let cell = nextCols[col]?.trim().replace(/\([A-Z]{2,4}\)/gi, "").trim();
+                if(cell && !/^-?\d+$/.test(cell) && !/^(T?\d+|E|CUT|WD|DQ|\+|-)$/i.test(cell) && cell.length > 2){
+                    cleanName = cell.split("\t")[0].trim();
+                    i++;
+                    break;
+                }
+            }
+        }
+
+        if(!cleanName) continue;
+
+        // Dynamic hole score extraction across trailing columns
+        let holes = [];
+        let startCol = (nameColIdx > 0) ? nameColIdx + 1 : 2;
+
+        for(let x = startCol; x < c.length; x++){
+            let hVal = cellToHole(c[x]);
+            if(hVal !== null) {
+                holes.push(hVal);
+            }
+            if(holes.length === 18) break;
+        }
+
+        while(holes.length < 18) holes.push(null);
+
+        players[cleanName] = {
+            name: cleanName,
+            holes: holes,
+            key: normalizeNameKey(cleanName)
+        };
     }
     return players;
 }
 
 let lastOFF=null,lastRS3=null;
 
-/* ================= MAPPINGS MANAGEMENT (FIRESTORE ONLY) ================= */
+/* ================= MAPPINGS MANAGEMENT ================= */
 function getMappings(){
     return cachedMappings;
 }
@@ -290,25 +354,19 @@ function openPlayerMapping(){
 }
 
 async function saveMappings(){
- const batch = db.batch();
- let count = 0;
-
- document.querySelectorAll('#mapPopup select').forEach(s=>{
+ const selects = document.querySelectorAll('#mapPopup select');
+ for(const s of selects) {
    if(s.value) {
-     const docId = s.dataset.key;
-     const officialName = s.dataset.official;
-     const rs3Name = s.value;
+     const normalizedKey = s.dataset.key;
+     const officialPlayer = s.dataset.official;
+     const rs3Player = s.value;
 
-     cachedMappings[docId] = rs3Name;
-     const docRef = db.collection("playerMappings").doc(docId);
-     batch.set(docRef, { officialName: officialName, rs3Name: rs3Name });
-     count++;
+     cachedMappings[normalizedKey] = rs3Player;
+     await db.collection("playerMappings").doc(normalizedKey).set({
+         officialName: officialPlayer,
+         rs3Name: rs3Player
+     });
    }
- });
-
- if(count > 0){
-   await batch.commit();
-   console.log("Mappings saved to Firestore.");
  }
 
  const popup = document.getElementById('mapPopup');
@@ -346,14 +404,16 @@ async function saveManagedMappings(){
    if(val) {
      cachedMappings[docId] = val;
      const docRef = db.collection("playerMappings").doc(docId);
-     batch.set(docRef, { officialName: docId, rs3Name: val });
+     batch.set(docRef, {
+         rs3Name: val
+     }, { merge: true });
      count++;
    }
  });
 
  if(count > 0){
    await batch.commit();
-   console.log("Managed mappings updated in Firestore.");
+   console.log("Managed mappings saved to Firestore");
  }
 
  const popup = document.getElementById('managePopup');
@@ -367,7 +427,7 @@ async function deleteMapping(k){
 
  const popup = document.getElementById('managePopup');
  if(popup) popup.remove();
- openManageMappings();
+ await openManageMappings();
 }
 
 /* ================= COMPARE ================= */
@@ -378,6 +438,10 @@ function compare(){
         RS3=parseRS3(rs3.value);
         lastOFF=OFF; lastRS3=RS3;
     }catch(e){return;}
+
+    console.log("Official Players:", Object.keys(OFF));
+    console.log("RS3 Players:", Object.keys(RS3));
+    console.log("Firestore Mappings:", cachedMappings);
 
     let html=`<table><tr><th>Player</th>`;
     for(let i=1;i<=18;i++) html+=`<th>H${i}</th>`;
