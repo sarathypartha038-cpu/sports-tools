@@ -4,8 +4,9 @@
 <meta charset="UTF-8">
 <title>Golf European Tour Score Compare Tool</title>
 
-<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+<!-- Firebase v8 CDN SDKs -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 
 <style>
 body { background:#e5e5e5; margin:0; padding:20px; font-family:Arial; text-align:center; }
@@ -93,7 +94,7 @@ td{ padding:6px; border:1px solid #ccc; text-align:center; }
 </div>
 
 <script>
-/* ================= FIREBASE INITIALIZATION ================= */
+/* ================= FIREBASE CONFIG & INITIALIZATION ================= */
 const firebaseConfig = {
   apiKey: "AIzaSyBGyyXlEUMC7bOHpHu0mMjBxGdehk6OT1E",
   authDomain: "sports-tools-fc26c.firebaseapp.com",
@@ -103,13 +104,13 @@ const firebaseConfig = {
   appId: "1:730294504124:web:67aec0314f9627db745eb9"
 };
 
-if (!firebase.apps.length) {
-    firebase.initializeApp(firebaseConfig);
-}
+firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
+
 let cachedMappings = {};
 
-async function loadMappings() {
+/* ================= FIRESTORE LOAD ================= */
+async function loadMappingsFromFirestore() {
     try {
         const snapshot = await db.collection("playerMappings").get();
         cachedMappings = {};
@@ -117,8 +118,9 @@ async function loadMappings() {
             const data = doc.data();
             cachedMappings[doc.id] = data.rs3Name || "";
         });
-    } catch(e) {
-        console.error("Error loading Firestore mappings:", e);
+        console.log("Firestore loaded", cachedMappings);
+    } catch (err) {
+        console.error("Error loading mappings from Firestore:", err);
     }
 }
 
@@ -139,7 +141,7 @@ window.onload = async () => {
         main.style.display="block";
         logoutBtn.style.display="block";
     }
-    await loadMappings();
+    await loadMappingsFromFirestore();
 };
 
 /* ================= CLEAR ================= */
@@ -331,7 +333,8 @@ function openPlayerMapping(){
  document.body.insertAdjacentHTML('beforeend',html);
 }
 
-function manageMappings(){
+async function manageMappings(){
+    await loadMappingsFromFirestore();
     const mappings = getMappings();
 
     let rows = "";
@@ -363,27 +366,36 @@ function manageMappings(){
 async function saveManagedMappings(){
     const batch = db.batch();
     let count = 0;
+
     document.querySelectorAll('#manageMapPopup input[data-key]').forEach(inp=>{
-        const key = inp.dataset.key;
+        const docId = inp.dataset.key;
         const val = inp.value.trim();
         if(val){
-            cachedMappings[key] = val;
-            const ref = db.collection("playerMappings").doc(key);
-            batch.set(ref, { officialKey: key, rs3Name: val });
+            cachedMappings[docId] = val;
+            const docRef = db.collection("playerMappings").doc(docId);
+            batch.set(docRef, {
+                officialName: docId,
+                rs3Name: val
+            });
             count++;
         }
     });
+
     if(count > 0){
         await batch.commit();
+        console.log("Mapping saved");
     }
+
     alert("Mappings updated");
     const popup = document.getElementById('manageMapPopup');
     if(popup) popup.remove();
 }
 
-async function deleteMapping(key){
-    delete cachedMappings[key];
-    await db.collection("playerMappings").doc(key).delete();
+async function deleteMapping(docId){
+    delete cachedMappings[docId];
+    await db.collection("playerMappings").doc(docId).delete();
+    console.log("Mapping deleted");
+
     const popup = document.getElementById('manageMapPopup');
     if(popup) popup.remove();
     manageMappings();
@@ -392,18 +404,28 @@ async function deleteMapping(key){
 async function saveMappings(){
  const batch = db.batch();
  let count = 0;
+
  document.querySelectorAll('#mapPopup select').forEach(s=>{
    if(s.value){
-      const key = normalizeOrder(s.dataset.official);
-      cachedMappings[key] = s.value;
-      const ref = db.collection("playerMappings").doc(key);
-      batch.set(ref, { officialKey: key, rs3Name: s.value });
+      const docId = normalizeOrder(s.dataset.official);
+      const officialName = s.dataset.official;
+      const rs3Name = s.value;
+
+      cachedMappings[docId] = rs3Name;
+      const docRef = db.collection("playerMappings").doc(docId);
+      batch.set(docRef, {
+          officialName: officialName,
+          rs3Name: rs3Name
+      });
       count++;
    }
  });
+
  if(count > 0){
     await batch.commit();
+    console.log("Mapping saved");
  }
+
  const popup = document.getElementById('mapPopup');
  if(popup) popup.remove();
  compare();
