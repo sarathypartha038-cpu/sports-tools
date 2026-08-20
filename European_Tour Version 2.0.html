@@ -2,61 +2,49 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Golf European Tour Score Compare Tool</title>
+<title>Golf PGA Champion and Korn Ferry Score Comparator</title>
 
 <!-- Firebase v8 CDN SDKs -->
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 
 <style>
-body { background:#e5e5e5; margin:0; padding:20px; font-family:Arial; text-align:center; }
-h1 { color:#004a99; }
-
-.wrap{
-    width:95%; margin:auto; background:#fff; padding:20px;
-    border-radius:10px; box-shadow:0 6px 24px rgba(0,0,0,.25);
-}
-.flex{ display:flex; gap:20px; }
-
+body{background:#e5e5e5;margin:0;padding:20px;font-family:Arial;text-align:center;}
+h1{color:#004a99;}
+.wrap{width:95%;margin:auto;background:#fff;padding:20px;border-radius:10px;
+box-shadow:0 6px 24px rgba(0,0,0,.25);}
+.flex{display:flex;gap:20px;}
 textarea{
-    width:50%; height:280px; padding:10px;
-    background:#111; color:#0f0; font-family:monospace;
-    border-radius:6px; border:1px solid #555;
+    width:50%;height:320px;padding:10px;background:#111;color:#0f0;
+    font-family:monospace;border-radius:6px;border:1px solid #555;
 }
-
 button{
-    padding:10px 20px; font-size:14px;
-    color:#fff; background:#0074e8;
-    border:none; border-radius:6px; cursor:pointer;
+    padding:10px 20px;font-size:14px;color:#fff;background:#0074e8;
+    border:none;border-radius:6px;cursor:pointer;margin:5px;
 }
-button:hover{ background:#005bbd; }
-.clearBtn{ background:#c00!important; }
-.clearBothBtn{ background:#c97300!important; }
+button:hover{background:#005bbd;}
+.clearBtn{background:#c00!important;}
+.clearBothBtn{background:#c97300!important;}
 
-table{ width:100%; border-collapse:collapse; margin-top:25px; font-size:13px; }
-th{
-    background:#005bbd; color:#fff; padding:6px;
-    border:1px solid #333; position:sticky; top:0;
-}
-td{ padding:6px; border:1px solid #ccc; text-align:center; }
+table{width:100%;border-collapse:collapse;margin-top:25px;font-size:13px;}
+th{background:#005bbd;color:#fff;padding:6px;border:1px solid #333;position:sticky;top:0;}
+td{padding:6px;border:1px solid #ccc;text-align:center;}
 
-.ok{ background:#d6ffe0; color:#006600; }
-.mis{ background:#ffe5e5; color:#990000; font-weight:bold; }
-.upd{ background:#fff7b3; }
+.ok{background:#d6ffe0;color:#006600;}
+.mis{background:#ffe5e5;color:#990000;font-weight:bold;}
+.upd{background:#fff7b3;color:#000;}
 
-.playerCell{ text-align:left; font-weight:bold; }
-.subName{ font-size:11px; color:#777; }
+.playerCell{text-align:left;font-weight:bold;}
+.subName{font-size:11px;color:#555;}
 
 #loginBox{
-    width:350px; margin:100px auto; padding:20px;
-    background:white; border-radius:10px;
-    box-shadow:0 0 20px rgba(0,0,0,0.2);
+    width:350px;margin:100px auto;padding:20px;background:#fff;
+    border-radius:10px;box-shadow:0 0 20px rgba(0,0,0,.2);
 }
 #logoutBtn{
-    position:absolute; right:30px; top:20px;
-    background:#c00; color:#fff;
-    padding:8px 22px; border-radius:6px;
-    border:none; cursor:pointer; font-weight:bold;
+    position:absolute;right:30px;top:20px;
+    background:#c00;color:#fff;padding:8px 22px;border-radius:6px;
+    border:none;cursor:pointer;font-weight:bold;
 }
 </style>
 </head>
@@ -66,37 +54,34 @@ td{ padding:6px; border:1px solid #ccc; text-align:center; }
 <button id="logoutBtn" style="display:none;" onclick="logout()">LOGOUT</button>
 
 <div id="loginBox">
-    <h2>Secure Login</h2>
-    <input id="user" placeholder="Username" style="width:90%;padding:8px;"><br><br>
-    <input id="pass" type="password" placeholder="Password" style="width:90%;padding:8px;"><br><br>
-    <button onclick="doLogin()">Login</button>
+<h2>Secure Login</h2>
+<input id="user" type="text" placeholder="Username" style="width:90%;padding:8px;"><br><br>
+<input id="pass" type="password" placeholder="Password" style="width:90%;padding:8px;"><br><br>
+<button onclick="doLogin()">Login</button>
 </div>
 
 <div id="main" style="display:none;">
-<h1>Golf European Tour Score Compare Tool</h1>
+<h1>Golf PGA Champion and Korn Ferry Score Comparator</h1>
 
 <div class="wrap">
-    <div style="margin-bottom:10px;">
-        <button class="clearBtn" onclick="clearOfficial()">Clear Official</button>
-        <button class="clearBothBtn" onclick="clearBoth()">Clear Both</button>
-        <button class="clearBtn" onclick="clearRS3()">Clear RS3</button>
-    </div>
+<button onclick="clearOfficial()" class="clearBtn">Clear Official</button>
+<button onclick="clearBoth()" class="clearBothBtn">Clear Both</button>
+<button onclick="clearRS3()" class="clearBtn">Clear RS3</button>
 
-    <div class="flex">
-        <textarea id="official" placeholder="Paste OFFICIAL data"></textarea>
-        <textarea id="rs3" placeholder="Paste RS3 data"></textarea>
-    </div>
+<div class="flex">
+<textarea id="official" placeholder="Paste OFFICIAL Excel (TAB separated)"></textarea>
+<textarea id="rs3" placeholder="Paste RS3 Excel (TAB separated)"></textarea>
+</div>
 
-    <br>
-    <button onclick="compare()">COMPARE</button> <button onclick="openPlayerMapping()">🗺 PLAYER MAPPING</button> <button onclick="manageMappings()">⚙ MANAGE MAPPINGS</button>
-    <div id="output"></div>
+<button onclick="compare()">COMPARE</button> <button onclick="openPlayerMapping()">🗺 PLAYER MAPPING</button> <button onclick="openManageMappings()">⚙ MANAGE MAPPINGS</button>
+<div id="output"></div>
 </div>
 </div>
 
 <script>
 /* ================= FIREBASE CONFIG & INITIALIZATION ================= */
 const firebaseConfig = {
-  apiKey: "AIzaSyBGyyXlEUMC7bOHpHu0mMjBxGdehk6OT1E",
+  apiKey: "AIzaSyBGyylXEUMC7bOHpHu0mMjBxGdehk6OT1E",
   authDomain: "sports-tools-fc26c.firebaseapp.com",
   projectId: "sports-tools-fc26c",
   storageBucket: "sports-tools-fc26c.firebasestorage.app",
@@ -131,9 +116,12 @@ function doLogin(){
         loginBox.style.display="none";
         main.style.display="block";
         logoutBtn.style.display="block";
-    }else alert("Invalid login");
+    } else alert("Invalid login!");
 }
-function logout(){ localStorage.removeItem("golfAuth"); location.reload(); }
+function logout(){
+    localStorage.removeItem("golfAuth");
+    location.reload();
+}
 
 window.onload = async () => {
     if(localStorage.getItem("golfAuth")==="1"){
@@ -145,150 +133,130 @@ window.onload = async () => {
 };
 
 /* ================= CLEAR ================= */
-function clearOfficial(){ official.value=""; }
-function clearRS3(){ rs3.value=""; }
-function clearBoth(){ clearOfficial(); clearRS3(); output.innerHTML=""; }
-
-/* ================= NAME NORMALIZATION ================= */
-function normalizeName(n){
-    return n
-        .replace(/[Øø]/g,"o").replace(/[Åå]/g,"a").replace(/[Ææ]/g,"ae")
-        .replace(/[ÁÀÂÃÄáàâãä]/g,"a")
-        .replace(/[ÉÈÊËéèêë]/g,"e")
-        .replace(/[ÍÌÎÏíìîï]/g,"i")
-        .replace(/[ÓÒÔÕÖóòôõö]/g,"o")
-        .replace(/[ÚÙÛÜúùûü]/g,"u")
-        .replace(/[Çç]/g,"c")
-        .replace(/[Ññ]/g,"n")
-        .replace(/\u00A0/g," ")
-        .replace(/\(.*?\)/g,"")
-        .replace(/\*/g,"")
-        .replace(/\./g,"")
-        .replace(/-/g," ")
-        .replace(/[^a-zA-Z\s,]/g," ")
-        .replace(/\s+/g," ")
-        .trim().toLowerCase();
-}
-function normalizeOrder(n){
-    n = normalizeName(n);
-    if(n.includes(",")){
-        const [l,f] = n.split(",").map(x=>x.trim());
-        return `${f} ${l}`;
-    }
-    return n;
-}
-
-/* ================= MATCHING ================= */
-function smartMatch(a,b){
-    const A = normalizeOrder(a);
-    const B = normalizeOrder(b);
-    if(!A || !B) return false;
-    if(A === B) return true;
-
-    const aParts = A.split(" ");
-    const bParts = B.split(" ");
-
-    const aLast = aParts[aParts.length-1];
-    const bLast = bParts[bParts.length-1];
-    if(aLast !== bLast) return false;
-
-    if(aParts[0] === bParts[0]) return true;
-    if(aParts[0][0] === bParts[0][0]) return true;
-
-    return false;
-}
+function clearOfficial(){official.value="";}
+function clearRS3(){rs3.value="";}
+function clearBoth(){clearOfficial();clearRS3();output.innerHTML="";}
 
 /* ================= HELPERS ================= */
-function cellToHole(x){
-    if(!x) return "-";
-    x = x.trim();
-    if(x === "-" || x === "–") return "-";
-    if(!/^-?\d+$/.test(x)) return "-";
-    return Number(x);
+function splitRowStrict(line,label){
+    if(!line.includes("\t")){
+        alert(label+" data must be pasted directly from Excel (TAB separated).");
+        throw "Invalid "+label+" format";
+    }
+    return line.split("\t");
 }
 
-/* ================= OFFICIAL PARSER ================= */
-function parseOfficial(text){
-    const players = {};
+function cellToHole(v){
+    if(v==null) return null;
+    v=String(v).trim();
+    if(!/^\d+$/.test(v)) return null;
+    let n=Number(v);
+    return (n>=2 && n<=9)?n:null;
+}
 
-    text.split("\n").forEach(line=>{
-        line = line.replace(/\u200B/g,"").trim();
-        if(!line) return;
+/* ================= NAME NORMALIZATION ================= */
+function normalizeNameKey(name){
+    if(!name) return "";
+    let s=name.normalize("NFD")
+        .replace(/[\u0300-\u036f]/g,"")
+        .toLowerCase()
+        .replace(/[().]/g,"")
+        .replace(/[^a-z\s]/g," ")
+        .replace(/\s+/g," ")
+        .trim();
 
-        let cols = line.split("\t").map(x=>x.trim());
-        if(cols.length < 15) return;
+    let parts=s.split(" ");
+    const suffixes=["jr","sr","ii","iii","iv"];
+    while(parts.length && suffixes.includes(parts[parts.length-1])) parts.pop();
+    if(parts.length<2) return "";
 
-        const nameIdx = cols.findIndex(c => c.includes(","));
-        if(nameIdx === -1) return;
+    const last=parts[parts.length-1];
+    const firsts=parts.slice(0,parts.length-1);
+    const initials=firsts.map(p=>p[0]).join("");
 
-        const name = cols[nameIdx];
-        const holes = [];
+    return last+"_"+initials;
+}
 
-        let start = nameIdx + 2;
+/* ================= NAME MATCH LOGIC ================= */
+function nameKeyMatch(k1,k2){
+    if(!k1 || !k2) return false;
 
-        for(let i=0;i<9;i++){
-            holes.push(cellToHole(cols[start + i]));
-        }
+    const [last1, ini1] = k1.split("_");
+    const [last2, ini2] = k2.split("_");
 
-        start = start + 9 + 1;
-
-        for(let i=0;i<9;i++){
-            holes.push(cellToHole(cols[start + i]));
-        }
-
-        players[name] = { name, holes };
-    });
-
-    return players;
+    if(last1 !== last2) return false;
+    if(ini1 === ini2) return true;
+    if(ini1.startsWith(ini2) || ini2.startsWith(ini1)) return true;
+    return false;
 }
 
 /* ================= RS3 PARSER ================= */
 function parseRS3(text){
-    const players = {};
-    text.split("\n").forEach(line=>{
-        const c = line.split("\t").map(x=>x.trim());
-        if(!/^\d+$/.test(c[0]) || !c[1]) return;
+    const lines=text.split(/\n/).map(l=>l.replace(/\u200B/g,"")).filter(l=>l.trim());
+    const players={};
 
-        const name = c[1];
-        const holes = [];
-        for(let i=8;i<=25;i++){
-            holes.push(cellToHole(c[i]));
-        }
-        players[name] = { name, holes };
-    });
+    for(const line of lines){
+        const c=splitRowStrict(line,"RS3");
+        if(!/^\d+$/.test(c[0])) continue;
+        const name=c[1]?.trim();
+        if(!name) continue;
+
+        const holes=c.slice(8,26).map(cellToHole);
+        while(holes.length<18) holes.push(null);
+
+        players[name]={name,holes,key:normalizeNameKey(name)};
+    }
     return players;
 }
 
-let lastOFF = null;
-let lastRS3 = null;
+/* ================= OFFICIAL PARSER ================= */
+function parseOfficial(text){
+    const lines=text.split(/\n/).map(l=>l.replace(/\u200B/g,"")).filter(l=>l.trim());
+    const players={};
 
+    for(let i=0;i<lines.length-1;i++){
+        const c=splitRowStrict(lines[i],"OFFICIAL");
+        if(!/^(T?\d+|-|\d+|E)$/.test(c[0]?.trim())) continue;
+
+        let holes=[];
+        for(let x=3;x<=11;x++) holes.push(cellToHole(c[x]));
+        for(let x=13;x<=21;x++) holes.push(cellToHole(c[x]));
+
+        while(holes.length<18) holes.push(null);
+
+        const name=lines[i+1].trim();
+        players[name]={name,holes,key:normalizeNameKey(name)};
+        i++;
+    }
+    return players;
+}
+
+let lastOFF=null,lastRS3=null;
+
+/* ================= MAPPINGS MANAGEMENT (FIRESTORE ONLY) ================= */
 function getMappings(){
     return cachedMappings;
 }
 
 function openPlayerMapping(){
- if(!lastOFF || !lastRS3){
-   alert("Run Compare first");
-   return;
- }
+ if(!lastOFF||!lastRS3){ alert("Run Compare first"); return; }
 
  const mappings=getMappings();
-
- let offUnmatched=[];
- let rs3Unmatched=[];
  const used=new Set();
+ const off=[];
+ const rs3=[];
 
  for(const o in lastOFF){
    let found=false;
 
-   const mapped=mappings[normalizeOrder(o)];
+   const mapped=mappings[lastOFF[o].key];
    if(mapped && lastRS3[mapped]){
       used.add(mapped);
       found=true;
    }else{
       for(const r in lastRS3){
         if(used.has(r)) continue;
-        if(smartMatch(o,r)){
+        if(nameKeyMatch(lastOFF[o].key,lastRS3[r].key)){
            used.add(r);
            found=true;
            break;
@@ -296,109 +264,29 @@ function openPlayerMapping(){
       }
    }
 
-   if(!found) offUnmatched.push(o);
+   if(!found) off.push(o);
  }
 
  for(const r in lastRS3){
-   if(!used.has(r)) rs3Unmatched.push(r);
+   if(!used.has(r)) rs3.push(r);
  }
 
  let rows="";
- offUnmatched.forEach(o=>{
-   rows+=`
-   <tr>
-      <td>${o}</td>
-      <td>
-        <select data-official="${o}">
-          <option value="">Select RS3 Player</option>
-          ${rs3Unmatched.map(r=>`<option value="${r}">${r}</option>`).join("")}
-        </select>
-      </td>
-   </tr>`;
+ off.forEach(o=>{
+   rows+=`<tr><td>${o}</td><td><select data-official="${o}" data-key="${lastOFF[o].key}">
+   <option value="">Select RS3 Player</option>
+   ${rs3.map(x=>`<option value="${x}">${x}</option>`).join("")}
+   </select></td></tr>`;
  });
 
- const html=`
- <div id="mapPopup" style="position:fixed;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:9999;">
-  <div style="background:#fff;width:900px;max-height:80%;overflow:auto;margin:40px auto;padding:20px;border-radius:8px;">
-   <h2>Player Mapping</h2>
-   <table style="width:100%;">
-    <tr><th>Official No Match</th><th>RS3 No Match</th></tr>
-    ${rows || '<tr><td colspan="2">No unmatched players found</td></tr>'}
-   </table><br>
-   <button onclick="saveMappings()">SAVE MAPPINGS</button>
-   <button onclick="document.getElementById('mapPopup').remove()">CLOSE</button>
-  </div>
- </div>`;
-
- document.body.insertAdjacentHTML('beforeend',html);
-}
-
-async function manageMappings(){
-    await loadMappingsFromFirestore();
-    const mappings = getMappings();
-
-    let rows = "";
-    Object.keys(mappings).forEach(key=>{
-        rows += `<tr>
-            <td>${key}</td>
-            <td><input type="text" value="${mappings[key]}" data-key="${key}" style="width:95%"></td>
-            <td><button onclick="deleteMapping('${key}')">🗑 Delete</button></td>
-        </tr>`;
-    });
-
-    const html=`
-    <div id="manageMapPopup" style="position:fixed;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:9999;">
-      <div style="background:#fff;width:1000px;max-height:80%;overflow:auto;margin:40px auto;padding:20px;border-radius:8px;">
-        <h2>Manage Mappings</h2>
-        <p><b>Saved Mappings:</b> ${Object.keys(mappings).length}</p>
-        <table style="width:100%;">
-          <tr><th>Official Player</th><th>RS3 Player</th><th>Action</th></tr>
-          ${rows || '<tr><td colspan="3">No mappings saved</td></tr>'}
-        </table><br>
-        <button onclick="saveManagedMappings()">💾 SAVE CHANGES</button>
-        <button onclick="document.getElementById('manageMapPopup').remove()">CLOSE</button>
-      </div>
-    </div>`;
-
-    document.body.insertAdjacentHTML('beforeend', html);
-}
-
-async function saveManagedMappings(){
-    const batch = db.batch();
-    let count = 0;
-
-    document.querySelectorAll('#manageMapPopup input[data-key]').forEach(inp=>{
-        const docId = inp.dataset.key;
-        const val = inp.value.trim();
-        if(val){
-            cachedMappings[docId] = val;
-            const docRef = db.collection("playerMappings").doc(docId);
-            batch.set(docRef, {
-                officialName: docId,
-                rs3Name: val
-            });
-            count++;
-        }
-    });
-
-    if(count > 0){
-        await batch.commit();
-        console.log("Mapping saved");
-    }
-
-    alert("Mappings updated");
-    const popup = document.getElementById('manageMapPopup');
-    if(popup) popup.remove();
-}
-
-async function deleteMapping(docId){
-    delete cachedMappings[docId];
-    await db.collection("playerMappings").doc(docId).delete();
-    console.log("Mapping deleted");
-
-    const popup = document.getElementById('manageMapPopup');
-    if(popup) popup.remove();
-    manageMappings();
+ document.body.insertAdjacentHTML('beforeend',`
+ <div id="mapPopup" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;">
+ <div style="background:#fff;width:900px;margin:40px auto;padding:20px;max-height:80%;overflow:auto;">
+ <h2>Player Mapping</h2>
+ <table width="100%"><tr><th>Official</th><th>RS3</th></tr>${rows}</table><br>
+ <button onclick="saveMappings()">Save</button>
+ <button onclick="document.getElementById('mapPopup').remove()">Close</button>
+ </div></div>`);
 }
 
 async function saveMappings(){
@@ -406,24 +294,21 @@ async function saveMappings(){
  let count = 0;
 
  document.querySelectorAll('#mapPopup select').forEach(s=>{
-   if(s.value){
-      const docId = normalizeOrder(s.dataset.official);
-      const officialName = s.dataset.official;
-      const rs3Name = s.value;
+   if(s.value) {
+     const docId = s.dataset.key;
+     const officialName = s.dataset.official;
+     const rs3Name = s.value;
 
-      cachedMappings[docId] = rs3Name;
-      const docRef = db.collection("playerMappings").doc(docId);
-      batch.set(docRef, {
-          officialName: officialName,
-          rs3Name: rs3Name
-      });
-      count++;
+     cachedMappings[docId] = rs3Name;
+     const docRef = db.collection("playerMappings").doc(docId);
+     batch.set(docRef, { officialName: officialName, rs3Name: rs3Name });
+     count++;
    }
  });
 
  if(count > 0){
-    await batch.commit();
-    console.log("Mapping saved");
+   await batch.commit();
+   console.log("Mappings saved to Firestore.");
  }
 
  const popup = document.getElementById('mapPopup');
@@ -431,60 +316,113 @@ async function saveMappings(){
  compare();
 }
 
+async function openManageMappings(){
+ await loadMappingsFromFirestore();
+ const m=getMappings();
+ let rows='';
+ Object.keys(m).forEach(k=>{
+   rows+=`<tr><td>${k}</td><td><input data-key="${k}" value="${m[k]}" style="width:95%"></td>
+   <td><button onclick="deleteMapping('${k}')">Delete</button></td></tr>`;
+ });
+
+ document.body.insertAdjacentHTML('beforeend',`
+ <div id="managePopup" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;">
+ <div style="background:#fff;width:1000px;margin:40px auto;padding:20px;max-height:80%;overflow:auto;">
+ <h2>Manage Mappings</h2>
+ <p>Saved Mappings: ${Object.keys(m).length}</p>
+ <table width="100%"><tr><th>Official Key</th><th>RS3 Player</th><th>Action</th></tr>${rows}</table><br>
+ <button onclick="saveManagedMappings()">Save Changes</button>
+ <button onclick="document.getElementById('managePopup').remove()">Close</button>
+ </div></div>`);
+}
+
+async function saveManagedMappings(){
+ const batch = db.batch();
+ let count = 0;
+
+ document.querySelectorAll('#managePopup input').forEach(i=>{
+   const docId = i.dataset.key;
+   const val = i.value.trim();
+   if(val) {
+     cachedMappings[docId] = val;
+     const docRef = db.collection("playerMappings").doc(docId);
+     batch.set(docRef, { officialName: docId, rs3Name: val });
+     count++;
+   }
+ });
+
+ if(count > 0){
+   await batch.commit();
+   console.log("Managed mappings updated in Firestore.");
+ }
+
+ const popup = document.getElementById('managePopup');
+ if(popup) popup.remove();
+}
+
+async function deleteMapping(k){
+ delete cachedMappings[k];
+ await db.collection("playerMappings").doc(k).delete();
+ console.log("Mapping deleted from Firestore:", k);
+
+ const popup = document.getElementById('managePopup');
+ if(popup) popup.remove();
+ openManageMappings();
+}
+
 /* ================= COMPARE ================= */
 function compare(){
-    const OFF = parseOfficial(official.value);
-    const RS3 = parseRS3(rs3.value);
-    lastOFF = OFF;
-    lastRS3 = RS3;
+    let OFF,RS3;
+    try{
+        OFF=parseOfficial(official.value);
+        RS3=parseRS3(rs3.value);
+        lastOFF=OFF; lastRS3=RS3;
+    }catch(e){return;}
 
-    const usedRS3 = new Set();
+    let html=`<table><tr><th>Player</th>`;
+    for(let i=1;i<=18;i++) html+=`<th>H${i}</th>`;
+    html+=`<th>Status</th></tr>`;
 
-    let html = `<table><tr>
-        <th>Player</th>
-        ${[...Array(18)].map((_,i)=>`<th>H${i+1}</th>`).join("")}
-        <th>Status</th></tr>`;
+    const usedRS3=new Set();
 
-    for(const o of Object.keys(OFF).sort()){
-        let r = null;
+    for(const o in OFF){
+        let match=null;
         const mappings=getMappings();
-        const mapped=mappings[normalizeOrder(o)];
+        const mapped=mappings[OFF[o].key];
         if(mapped && RS3[mapped]){
-            r=mapped;
+            match=mapped;
             usedRS3.add(mapped);
         }
-        if(!r) for(const k in RS3){
-            if(usedRS3.has(k)) continue;
-            if(smartMatch(o,k)){
-                r = k;
-                usedRS3.add(k);
+        if(!match) for(const r in RS3){
+            if(usedRS3.has(r)) continue;
+            if(nameKeyMatch(OFF[o].key,RS3[r].key)){
+                match=r;
+                usedRS3.add(r);
                 break;
             }
         }
 
-        const O = OFF[o];
-        const R = r ? RS3[r] : null;
-        let status = "MATCH";
+        const O=OFF[o];
+        const R=match?RS3[match]:null;
+        let status="MATCH";
 
-        let row = `<tr>
-            <td class="playerCell">${o}<br>
-            <span class="subName">⇔ ${r || "NO MATCH"}</span></td>`;
+        let row=`<tr><td class="playerCell">${o}<br>
+        <span class="subName">⇔ ${match||"NO MATCH"}</span></td>`;
 
-        for(let i=0;i<18;i++){
-            const a = O.holes[i] === "-" ? null : O.holes[i];
-            const b = R ? (R.holes[i] === "-" ? null : R.holes[i]) : null;
-
+        for (let h = 0; h < 18; h++) {
+            const a = O.holes[h];
+            const b = R ? R.holes[h] : null;
             let cls = "ok";
 
-            if(a !== null && b === null){
+            if (a != null && b == null) {
                 cls = "upd";
-                if(status !== "MISMATCH") status = "NEED TO UPDATE";
+                status = "NEED TO UPDATE";
             }
-            else if(a === null && b !== null){
+            else if (a == null && b != null) {
                 cls = "mis";
                 status = "MISMATCH";
             }
-            else if(a !== null && b !== null && a !== b){
+            else if (a != null && b != null && a !== b) {
                 cls = "mis";
                 status = "MISMATCH";
             }
@@ -492,13 +430,13 @@ function compare(){
             row += `<td class="${cls}">${a ?? "-"}|${b ?? "-"}</td>`;
         }
 
-        row += `<td class="${status==="MATCH"?"ok":status==="NEED TO UPDATE"?"upd":"mis"}">${status}</td></tr>`;
-        html += row;
+        row+=`<td class="${status==="MATCH"?"ok":status==="NEED TO UPDATE"?"upd":"mis"}">${status}</td></tr>`;
+        html+=row;
     }
 
-    output.innerHTML = html + "</table>";
+    html+="</table>";
+    output.innerHTML=html;
 }
 </script>
-
 </body>
 </html>
