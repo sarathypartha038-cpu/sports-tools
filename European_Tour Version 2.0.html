@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Golf European Tour Score Compare Tool</title>
+
+<style>
+body { background:#e5e5e5; margin:0; padding:20px; font-family:Arial; text-align:center; }
+h1 { color:#004a99; }
+
+.wrap{
+    width:95%; margin:auto; background:#fff; padding:20px;
+    border-radius:10px; box-shadow:0 6px 24px rgba(0,0,0,.25);
+}
+.flex{ display:flex; gap:20px; }
+
+textarea{
+    width:50%; height:280px; padding:10px;
+    background:#111; color:#0f0; font-family:monospace;
+    border-radius:6px; border:1px solid #555;
+}
+
+button{
+    padding:10px 20px; font-size:14px;
+    color:#fff; background:#0074e8;
+    border:none; border-radius:6px; cursor:pointer;
+}
+button:hover{ background:#005bbd; }
+.clearBtn{ background:#c00!important; }
+.clearBothBtn{ background:#c97300!important; }
+
+table{ width:100%; border-collapse:collapse; margin-top:25px; font-size:13px; }
+th{
+    background:#005bbd; color:#fff; padding:6px;
+    border:1px solid #333; position:sticky; top:0;
+}
+td{ padding:6px; border:1px solid #ccc; text-align:center; }
+
+.ok{ background:#d6ffe0; color:#006600; }
+.mis{ background:#ffe5e5; color:#990000; font-weight:bold; }
+.upd{ background:#fff7b3; }
+
+.playerCell{ text-align:left; font-weight:bold; }
+.subName{ font-size:11px; color:#777; }
+
+#loginBox{
+    width:350px; margin:100px auto; padding:20px;
+    background:white; border-radius:10px;
+    box-shadow:0 0 20px rgba(0,0,0,0.2);
+}
+#logoutBtn{
+    position:absolute; right:30px; top:20px;
+    background:#c00; color:#fff;
+    padding:8px 22px; border-radius:6px;
+    border:none; cursor:pointer; font-weight:bold;
+}
+</style>
+</head>
+
+<body>
+
+<button id="logoutBtn" style="display:none;" onclick="logout()">LOGOUT</button>
+
+<div id="loginBox">
+    <h2>Secure Login</h2>
+    <input id="user" placeholder="Username" style="width:90%;padding:8px;"><br><br>
+    <input id="pass" type="password" placeholder="Password" style="width:90%;padding:8px;"><br><br>
+    <button onclick="doLogin()">Login</button>
+</div>
+
+<div id="main" style="display:none;">
+<h1>Golf European Tour Score Compare Tool</h1>
+
+<div class="wrap">
+    <div style="margin-bottom:10px;">
+        <button class="clearBtn" onclick="clearOfficial()">Clear Official</button>
+        <button class="clearBothBtn" onclick="clearBoth()">Clear Both</button>
+        <button class="clearBtn" onclick="clearRS3()">Clear RS3</button>
+    </div>
+
+    <div class="flex">
+        <textarea id="official" placeholder="Paste OFFICIAL data"></textarea>
+        <textarea id="rs3" placeholder="Paste RS3 data"></textarea>
+    </div>
+
+    <br>
+    <button onclick="compare()">COMPARE</button> <button onclick="openPlayerMapping()">🗺 PLAYER MAPPING</button> <button onclick="manageMappings()">⚙ MANAGE MAPPINGS</button>
+    <div id="output"></div>
+</div>
+</div>
+
+<script>
+/* ================= LOGIN ================= */
+function doLogin(){
+    if(user.value==="OSED" && pass.value==="OSED@1234"){
+        localStorage.setItem("golfAuth","1");
+        loginBox.style.display="none";
+        main.style.display="block";
+        logoutBtn.style.display="block";
+    }else alert("Invalid login");
+}
+function logout(){ localStorage.removeItem("golfAuth"); location.reload(); }
+
+window.onload=()=>{
+    if(localStorage.getItem("golfAuth")==="1"){
+        loginBox.style.display="none";
+        main.style.display="block";
+        logoutBtn.style.display="block";
+    }
+};
+
+/* ================= CLEAR ================= */
+function clearOfficial(){ official.value=""; }
+function clearRS3(){ rs3.value=""; }
+function clearBoth(){ clearOfficial(); clearRS3(); output.innerHTML=""; }
+
+/* ================= NAME NORMALIZATION ================= */
+function normalizeName(n){
+    return n
+        .replace(/[Øø]/g,"o").replace(/[Åå]/g,"a").replace(/[Ææ]/g,"ae")
+        .replace(/[ÁÀÂÃÄáàâãä]/g,"a")
+        .replace(/[ÉÈÊËéèêë]/g,"e")
+        .replace(/[ÍÌÎÏíìîï]/g,"i")
+        .replace(/[ÓÒÔÕÖóòôõö]/g,"o")
+        .replace(/[ÚÙÛÜúùûü]/g,"u")
+        .replace(/[Çç]/g,"c")
+        .replace(/[Ññ]/g,"n")
+        .replace(/\u00A0/g," ")
+        .replace(/\(.*?\)/g,"")
+        .replace(/\*/g,"")
+        .replace(/\./g,"")
+        .replace(/-/g," ")
+        .replace(/[^a-zA-Z\s,]/g," ")
+        .replace(/\s+/g," ")
+        .trim().toLowerCase();
+}
+function normalizeOrder(n){
+    n = normalizeName(n);
+    if(n.includes(",")){
+        const [l,f] = n.split(",").map(x=>x.trim());
+        return `${f} ${l}`;
+    }
+    return n;
+}
+
+/* ================= MATCHING ================= */
+function smartMatch(a,b){
+    const A = normalizeOrder(a);
+    const B = normalizeOrder(b);
+    if(!A || !B) return false;
+    if(A === B) return true;
+
+    const aParts = A.split(" ");
+    const bParts = B.split(" ");
+
+    const aLast = aParts[aParts.length-1];
+    const bLast = bParts[bParts.length-1];
+    if(aLast !== bLast) return false;
+
+    if(aParts[0] === bParts[0]) return true;
+    if(aParts[0][0] === bParts[0][0]) return true;
+
+    return false;
+}
+
+/* ================= HELPERS ================= */
+function cellToHole(x){
+    if(!x) return "-";
+    x = x.trim();
+    if(x === "-" || x === "–") return "-";
+    if(!/^-?\d+$/.test(x)) return "-";
+    return Number(x);
+}
+
+/* ================= OFFICIAL PARSER (FIXED) ================= */
+/*
+Official format:
+Rank | Name | Score | H1..H9 | OUT | H10..H18 | IN | TOTAL | THRU
+*/
+function parseOfficial(text){
+    const players = {};
+
+    text.split("\n").forEach(line=>{
+        line = line.replace(/\u200B/g,"").trim();
+        if(!line) return;
+
+        let cols = line.split("\t").map(x=>x.trim());
+        if(cols.length < 15) return;
+
+        const nameIdx = cols.findIndex(c => c.includes(","));
+        if(nameIdx === -1) return;
+
+        const name = cols[nameIdx];
+        const holes = [];
+
+        // H1 starts exactly at nameIdx + 2
+        let start = nameIdx + 2;
+
+        // H1–H9
+        for(let i=0;i<9;i++){
+            holes.push(cellToHole(cols[start + i]));
+        }
+
+        // Skip OUT column
+        start = start + 9 + 1;
+
+        // H10–H18
+        for(let i=0;i<9;i++){
+            holes.push(cellToHole(cols[start + i]));
+        }
+
+        players[name] = { name, holes };
+    });
+
+    return players;
+}
+
+/* ================= RS3 PARSER ================= */
+/*
+RS3 layout:
+A = Rank
+B = Name
+I → Z (index 8 → 25) = H1 → H18
+*/
+function parseRS3(text){
+    const players = {};
+    text.split("\n").forEach(line=>{
+        const c = line.split("\t").map(x=>x.trim());
+        if(!/^\d+$/.test(c[0]) || !c[1]) return;
+
+        const name = c[1];
+        const holes = [];
+        for(let i=8;i<=25;i++){
+            holes.push(cellToHole(c[i]));
+        }
+        players[name] = { name, holes };
+    });
+    return players;
+}
+
+
+let lastOFF = null;
+let lastRS3 = null;
+
+function getMappings(){
+ return JSON.parse(localStorage.getItem("playerMappings")||"{}");
+}
+
+function openPlayerMapping(){
+ if(!lastOFF || !lastRS3){
+   alert("Run Compare first");
+   return;
+ }
+
+ const mappings=getMappings();
+
+ let offUnmatched=[];
+ let rs3Unmatched=[];
+ const used=new Set();
+
+ for(const o in lastOFF){
+   let found=false;
+
+   const mapped=mappings[normalizeOrder(o)];
+   if(mapped && lastRS3[mapped]){
+      used.add(mapped);
+      found=true;
+   }else{
+      for(const r in lastRS3){
+        if(used.has(r)) continue;
+        if(smartMatch(o,r)){
+           used.add(r);
+           found=true;
+           break;
+        }
+      }
+   }
+
+   if(!found) offUnmatched.push(o);
+ }
+
+ for(const r in lastRS3){
+   if(!used.has(r)) rs3Unmatched.push(r);
+ }
+
+ let rows="";
+ offUnmatched.forEach(o=>{
+   rows+=`
+   <tr>
+      <td>${o}</td>
+      <td>
+        <select data-official="${o}">
+          <option value="">Select RS3 Player</option>
+          ${rs3Unmatched.map(r=>`<option value="${r}">${r}</option>`).join("")}
+        </select>
+      </td>
+   </tr>`;
+ });
+
+ const html=`
+ <div id="mapPopup" style="position:fixed;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:9999;">
+  <div style="background:#fff;width:900px;max-height:80%;overflow:auto;margin:40px auto;padding:20px;border-radius:8px;">
+   <h2>Player Mapping</h2>
+   <table style="width:100%;">
+    <tr><th>Official No Match</th><th>RS3 No Match</th></tr>
+    ${rows || '<tr><td colspan="2">No unmatched players found</td></tr>'}
+   </table><br>
+   <button onclick="saveMappings()">SAVE MAPPINGS</button>
+   <button onclick="document.getElementById('mapPopup').remove()">CLOSE</button>
+  </div>
+ </div>`;
+
+ document.body.insertAdjacentHTML('beforeend',html);
+}
+
+
+function manageMappings(){
+    const mappings = JSON.parse(localStorage.getItem("playerMappings") || "{}");
+
+    let rows = "";
+    Object.keys(mappings).forEach(key=>{
+        rows += `<tr>
+            <td>${key}</td>
+            <td><input type="text" value="${mappings[key]}" data-key="${key}" style="width:95%"></td>
+            <td><button onclick="deleteMapping('${key}')">🗑 Delete</button></td>
+        </tr>`;
+    });
+
+    const html=`
+    <div id="manageMapPopup" style="position:fixed;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:9999;">
+      <div style="background:#fff;width:1000px;max-height:80%;overflow:auto;margin:40px auto;padding:20px;border-radius:8px;">
+        <h2>Manage Mappings</h2>
+        <p><b>Saved Mappings:</b> ${Object.keys(mappings).length}</p>
+        <table style="width:100%;">
+          <tr><th>Official Player</th><th>RS3 Player</th><th>Action</th></tr>
+          ${rows || '<tr><td colspan="3">No mappings saved</td></tr>'}
+        </table><br>
+        <button onclick="saveManagedMappings()">💾 SAVE CHANGES</button>
+        <button onclick="document.getElementById('manageMapPopup').remove()">CLOSE</button>
+      </div>
+    </div>`;
+
+    document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function saveManagedMappings(){
+    const mappings = {};
+    document.querySelectorAll('#manageMapPopup input[data-key]').forEach(inp=>{
+        if(inp.value.trim()){
+            mappings[inp.dataset.key] = inp.value.trim();
+        }
+    });
+    localStorage.setItem("playerMappings", JSON.stringify(mappings));
+    alert("Mappings updated");
+    document.getElementById('manageMapPopup').remove();
+}
+
+function deleteMapping(key){
+    const mappings = JSON.parse(localStorage.getItem("playerMappings") || "{}");
+    delete mappings[key];
+    localStorage.setItem("playerMappings", JSON.stringify(mappings));
+    document.getElementById('manageMapPopup').remove();
+    manageMappings();
+}
+
+function saveMappings(){
+ const m=getMappings();
+ document.querySelectorAll('#mapPopup select').forEach(s=>{
+   if(s.value){
+      m[normalizeOrder(s.dataset.official)] = s.value;
+   }
+ });
+ localStorage.setItem("playerMappings",JSON.stringify(m));
+ document.getElementById('mapPopup').remove();
+ compare();
+}
+
+/* ================= COMPARE ================= */
+function compare(){
+    const OFF = parseOfficial(official.value);
+    const RS3 = parseRS3(rs3.value);
+    lastOFF = OFF;
+    lastRS3 = RS3;
+
+    const usedRS3 = new Set();
+
+    let html = `<table><tr>
+        <th>Player</th>
+        ${[...Array(18)].map((_,i)=>`<th>H${i+1}</th>`).join("")}
+        <th>Status</th></tr>`;
+
+    for(const o of Object.keys(OFF).sort()){
+        let r = null;
+        const mappings=getMappings();
+        const mapped=mappings[normalizeOrder(o)];
+        if(mapped && RS3[mapped]){
+            r=mapped;
+            usedRS3.add(mapped);
+        }
+        if(!r) for(const k in RS3){
+            if(usedRS3.has(k)) continue;
+            if(smartMatch(o,k)){
+                r = k;
+                usedRS3.add(k);
+                break;
+            }
+        }
+
+        const O = OFF[o];
+        const R = r ? RS3[r] : null;
+        let status = "MATCH";
+
+        let row = `<tr>
+            <td class="playerCell">${o}<br>
+            <span class="subName">⇔ ${r || "NO MATCH"}</span></td>`;
+
+        for(let i=0;i<18;i++){
+    const a = O.holes[i] === "-" ? null : O.holes[i];     // OFFICIAL
+    const b = R ? (R.holes[i] === "-" ? null : R.holes[i]) : null; // RS3
+
+    let cls = "ok";
+
+    // OFFICIAL has value, RS3 missing → NEED TO UPDATE (Yellow)
+    if(a !== null && b === null){
+        cls = "upd";
+        if(status !== "MISMATCH") status = "NEED TO UPDATE";
+    }
+    // OFFICIAL missing, RS3 has value → MISMATCH (Red)
+    else if(a === null && b !== null){
+        cls = "mis";
+        status = "MISMATCH";
+    }
+    // Both present but different → MISMATCH (Red)
+    else if(a !== null && b !== null && a !== b){
+        cls = "mis";
+        status = "MISMATCH";
+    }
+
+    row += `<td class="${cls}">${a ?? "-"}|${b ?? "-"}</td>`;
+}
+
+
+        row += `<td class="${status==="MATCH"?"ok":status==="NEED TO UPDATE"?"upd":"mis"}">${status}</td></tr>`;
+        html += row;
+    }
+
+    output.innerHTML = html + "</table>";
+}
+</script>
+
+</body>
+</html>
