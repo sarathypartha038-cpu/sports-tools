@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <title>Golf PGA Champion and Korn Ferry Score Comparator</title>
 
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
 <style>
 body{background:#e5e5e5;margin:0;padding:20px;font-family:Arial;text-align:center;}
 h1{color:#004a99;}
@@ -75,6 +78,35 @@ td{padding:6px;border:1px solid #ccc;text-align:center;}
 </div>
 
 <script>
+/* ================= FIREBASE INITIALIZATION ================= */
+const firebaseConfig = {
+  apiKey: "AIzaSyBGyyXlEUMC7bOHpHu0mMjBxGdehk6OT1E",
+  authDomain: "sports-tools-fc26c.firebaseapp.com",
+  projectId: "sports-tools-fc26c",
+  storageBucket: "sports-tools-fc26c.firebasestorage.app",
+  messagingSenderId: "730294504124",
+  appId: "1:730294504124:web:67aec0314f9627db745eb9"
+};
+
+if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+}
+const db = firebase.firestore();
+let cachedMappings = {};
+
+async function loadMappings() {
+    try {
+        const snapshot = await db.collection("playerMappingsKF").get();
+        cachedMappings = {};
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            cachedMappings[doc.id] = data.rs3Name || "";
+        });
+    } catch(e) {
+        console.error("Error loading Firestore mappings:", e);
+    }
+}
+
 /* ================= LOGIN ================= */
 function doLogin(){
     if(user.value==="OSED" && pass.value==="OSED@1234"){
@@ -85,7 +117,15 @@ function doLogin(){
     } else alert("Invalid login!");
 }
 function logout(){localStorage.removeItem("golfAuth");location.reload();}
-window.onload=()=>{if(localStorage.getItem("golfAuth")==="1"){loginBox.style.display="none";main.style.display="block";logoutBtn.style.display="block";}}
+
+window.onload = async () => {
+    if(localStorage.getItem("golfAuth")==="1"){
+        loginBox.style.display="none";
+        main.style.display="block";
+        logoutBtn.style.display="block";
+    }
+    await loadMappings();
+};
 
 /* ================= CLEAR ================= */
 function clearOfficial(){official.value="";}
@@ -133,14 +173,6 @@ function normalizeNameKey(name){
 }
 
 /* ================= NAME MATCH LOGIC ================= */
-/*
-Rules:
-1. Last name must match
-2. Initials must be equal OR one must be prefix of the other
-   J  ↔ JJ
-   A  ↔ AJ
-   SW ↔ SWO
-*/
 function nameKeyMatch(k1,k2){
     if(!k1 || !k2) return false;
 
@@ -154,12 +186,6 @@ function nameKeyMatch(k1,k2){
 }
 
 /* ================= RS3 PARSER ================= */
-/*
-RS3:
-A Pos
-B Name
-I..Z → H1..H18
-*/
 function parseRS3(text){
     const lines=text.split(/\n/).map(l=>l.replace(/\u200B/g,"")).filter(l=>l.trim());
     const players={};
@@ -179,11 +205,6 @@ function parseRS3(text){
 }
 
 /* ================= OFFICIAL PARSER ================= */
-/*
-Official:
-Row1: Pos, blank, Total, H1..H9, Out, H10..H18, In, Tot, R2
-Row2: Player name
-*/
 function parseOfficial(text){
     const lines=text.split(/\n/).map(l=>l.replace(/\u200B/g,"")).filter(l=>l.trim());
     const players={};
@@ -193,8 +214,8 @@ function parseOfficial(text){
         if(!/^(T?\d+|-|\d+|E)$/.test(c[0]?.trim())) continue;
 
         let holes=[];
-        for(let x=3;x<=11;x++) holes.push(cellToHole(c[x]));   // D..L
-        for(let x=13;x<=21;x++) holes.push(cellToHole(c[x]));  // N..V
+        for(let x=3;x<=11;x++) holes.push(cellToHole(c[x]));
+        for(let x=13;x<=21;x++) holes.push(cellToHole(c[x]));
 
         while(holes.length<18) holes.push(null);
 
@@ -205,11 +226,10 @@ function parseOfficial(text){
     return players;
 }
 
-
 let lastOFF=null,lastRS3=null;
 
 function getMappings(){
- return JSON.parse(localStorage.getItem("playerMappingsKF")||"{}");
+    return cachedMappings;
 }
 
 function openPlayerMapping(){
@@ -263,13 +283,23 @@ function openPlayerMapping(){
  </div></div>`);
 }
 
-function saveMappings(){
- const m=getMappings();
+async function saveMappings(){
+ const batch = db.batch();
+ let count = 0;
  document.querySelectorAll('#mapPopup select').forEach(s=>{
-   if(s.value) m[s.dataset.key]=s.value;
+   if(s.value) {
+     const key = s.dataset.key;
+     cachedMappings[key] = s.value;
+     const ref = db.collection("playerMappingsKF").doc(key);
+     batch.set(ref, { officialKey: key, rs3Name: s.value });
+     count++;
+   }
  });
- localStorage.setItem("playerMappingsKF",JSON.stringify(m));
- document.getElementById('mapPopup').remove();
+ if(count > 0){
+   await batch.commit();
+ }
+ const popup = document.getElementById('mapPopup');
+ if(popup) popup.remove();
  compare();
 }
 
@@ -292,20 +322,31 @@ function manageMappings(){
  </div></div>`);
 }
 
-function saveManagedMappings(){
- const m={};
+async function saveManagedMappings(){
+ const batch = db.batch();
+ let count = 0;
  document.querySelectorAll('#managePopup input').forEach(i=>{
-   if(i.value.trim()) m[i.dataset.key]=i.value.trim();
+   const key = i.dataset.key;
+   const val = i.value.trim();
+   if(val) {
+     cachedMappings[key] = val;
+     const ref = db.collection("playerMappingsKF").doc(key);
+     batch.set(ref, { officialKey: key, rs3Name: val });
+     count++;
+   }
  });
- localStorage.setItem("playerMappingsKF",JSON.stringify(m));
- document.getElementById('managePopup').remove();
+ if(count > 0){
+   await batch.commit();
+ }
+ const popup = document.getElementById('managePopup');
+ if(popup) popup.remove();
 }
 
-function deleteMapping(k){
- const m=getMappings();
- delete m[k];
- localStorage.setItem("playerMappingsKF",JSON.stringify(m));
- document.getElementById('managePopup').remove();
+async function deleteMapping(k){
+ delete cachedMappings[k];
+ await db.collection("playerMappingsKF").doc(k).delete();
+ const popup = document.getElementById('managePopup');
+ if(popup) popup.remove();
  manageMappings();
 }
 
@@ -349,28 +390,25 @@ function compare(){
         <span class="subName">⇔ ${match||"NO MATCH"}</span></td>`;
 
         for (let h = 0; h < 18; h++) {
-    const a = O.holes[h];            // OFFICIAL
-    const b = R ? R.holes[h] : null; // RS3
-    let cls = "ok";
+            const a = O.holes[h];
+            const b = R ? R.holes[h] : null;
+            let cls = "ok";
 
-    // OFFICIAL has value, RS3 missing → NEED TO UPDATE
-    if (a != null && b == null) {
-        cls = "upd";
-        status = "NEED TO UPDATE";
-    }
-    // OFFICIAL missing, RS3 has value → MISMATCH
-    else if (a == null && b != null) {
-        cls = "mis";
-        status = "MISMATCH";
-    }
-    // Both present but different → MISMATCH
-    else if (a != null && b != null && a !== b) {
-        cls = "mis";
-        status = "MISMATCH";
-    }
+            if (a != null && b == null) {
+                cls = "upd";
+                status = "NEED TO UPDATE";
+            }
+            else if (a == null && b != null) {
+                cls = "mis";
+                status = "MISMATCH";
+            }
+            else if (a != null && b != null && a !== b) {
+                cls = "mis";
+                status = "MISMATCH";
+            }
 
-    row += `<td class="${cls}">${a ?? "-"}|${b ?? "-"}</td>`;
-}
+            row += `<td class="${cls}">${a ?? "-"}|${b ?? "-"}</td>`;
+        }
 
         row+=`<td class="${status==="MATCH"?"ok":status==="NEED TO UPDATE"?"upd":"mis"}">${status}</td></tr>`;
         html+=row;
