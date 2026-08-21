@@ -152,7 +152,7 @@ function cellToHole(v){
     return (n>=2 && n<=9)?n:null;
 }
 
-// NAME NORMALIZATION
+// FULL NAME NORMALIZATION
 function normalizeNameKey(name){
     if(!name) return "";
     let s=name.normalize("NFD")
@@ -169,11 +169,12 @@ function normalizeNameKey(name){
     return last+"_"+initials;
 }
 
+// EXACT MATCH ONLY (No First-Initial or Abbreviated Prefix Matching)
 function nameKeyMatch(k1,k2){
     if(!k1 || !k2) return false;
     const [l1,i1]=k1.split("_");
     const [l2,i2]=k2.split("_");
-    return l1===l2 && (i1===i2 || i1.startsWith(i2) || i2.startsWith(i1));
+    return l1===l2 && i1===i2;
 }
 
 // PARSE RS3
