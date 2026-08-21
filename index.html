@@ -1,36 +1,60 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Sports Tools</title>
-<style>
-body{
-    font-family:Arial;
-    text-align:center;
-    padding:50px;
-}
-a{
-    display:block;
-    width:300px;
-    margin:20px auto;
-    padding:15px;
-    background:#0078d7;
-    color:white;
-    text-decoration:none;
-    border-radius:8px;
-}
-</style>
+    <title>Golf Comparison Tools</title>
+    <style>
+        body{
+            font-family:Arial;
+            background:#f2f2f2;
+            text-align:center;
+            padding:50px;
+        }
+
+        .container{
+            max-width:800px;
+            margin:auto;
+        }
+
+        .tool{
+            display:block;
+            margin:20px auto;
+            padding:20px;
+            width:400px;
+            background:#0074e8;
+            color:white;
+            text-decoration:none;
+            font-size:20px;
+            border-radius:10px;
+        }
+
+        .tool:hover{
+            background:#005bbd;
+        }
+    </style>
 </head>
 <body>
 
-<h1>Sports Tools</h1>
+<div class="container">
 
-<a href="European_Tour%20Version%202.0.html">
-European Tour
-</a>
+    <h1>Golf Score Comparison Tools</h1>
 
-<a href="PGA_KornFerry_Champion%20-%20Version%202.0.html">
-PGA Korn Ferry
-</a>
+    <a class="tool" href="european-tour.html">
+        European Tour Comparator
+    </a>
+
+    <a class="tool" href="pga-tour.html">
+        PGA Tour Comparator
+    </a>
+
+    <a class="tool" href="lpga-tour.html">
+        LPGA Tour Comparator
+    </a>
+
+    <a class="tool" href="major-championships.html">
+        Major Championships Comparator
+    </a>
+
+</div>
 
 </body>
 </html>
