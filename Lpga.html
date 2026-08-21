@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>LPGA Score Comparator</title>
+
+<!-- Firebase SDKs -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+<style>
+body{background:#e5e5e5;margin:0;padding:20px;font-family:Arial;text-align:center;}
+h1{color:#004a99;}
+.wrap{width:95%;margin:auto;background:#fff;padding:20px;border-radius:10px;
+box-shadow:0 6px 24px rgba(0,0,0,.25);} 
+.flex{display:flex;gap:20px;}
+textarea{
+    width:50%;height:320px;padding:10px;background:#111;color:#0f0;
+    font-family:monospace;border-radius:6px;border:1px solid #555;
+}
+button{
+    padding:10px 20px;font-size:14px;color:#fff;background:#0074e8;
+    border:none;border-radius:6px;cursor:pointer;margin:5px;
+}
+button:hover{background:#005bbd;}
+.clearBtn{background:#c00!important;}
+.clearBothBtn{background:#c97300!important;}
+
+table{width:100%;border-collapse:collapse;margin-top:25px;font-size:13px;}
+th{background:#005bbd;color:#fff;padding:6px;border:1px solid #333;position:sticky;top:0;}
+td{padding:6px;border:1px solid #ccc;text-align:center;}
+
+.ok{background:#d6ffe0;color:#006600;}
+.mis{background:#ffe5e5;color:#990000;font-weight:bold;}
+.upd{background:#fff7b3;color:#000;}
+
+.playerCell{text-align:left;font-weight:bold;}
+.subName{font-size:11px;color:#555;}
+
+#loginBox{
+    width:350px;margin:100px auto;padding:20px;background:#fff;
+    border-radius:10px;box-shadow:0 0 20px rgba(0,0,0,.2);
+}
+#logoutBtn{
+    position:absolute;right:30px;top:20px;
+    background:#c00;color:#fff;padding:8px 22px;border-radius:6px;
+    border:none;cursor:pointer;font-weight:bold;
+}
+</style>
+</head>
+
+<body>
+
+<button id="logoutBtn" style="display:none;" onclick="logout()">LOGOUT</button>
+
+<div id="loginBox">
+<h2>Secure Login</h2>
+<input id="user" type="text" placeholder="Username"><br><br>
+<input id="pass" type="password" placeholder="Password"><br><br>
+<button onclick="doLogin()">Login</button>
+</div>
+
+<div id="main" style="display:none;">
+<h1>LPGA Score Comparator</h1>
+
+<div class="wrap">
+<button onclick="clearOfficial()" class="clearBtn">Clear Official</button>
+<button onclick="clearBoth()" class="clearBothBtn">Clear Both</button>
+<button onclick="clearRS3()" class="clearBtn">Clear RS3</button>
+
+<div class="flex">
+<textarea id="official" placeholder="Paste OFFICIAL Excel"></textarea>
+<textarea id="rs3" placeholder="Paste RS3 Excel"></textarea>
+</div>
+
+<button onclick="compare()">COMPARE</button> <button onclick="openPlayerMapping()">🗺 PLAYER MAPPING</button> <button onclick="manageMappings()">⚙ MANAGE MAPPINGS</button>
+<div id="output"></div>
+</div>
+</div>
+
+<script>
+// Firebase Configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyBGyylXEUMC7bOHpHu0mMjBxGdehk6OT1E",
+  authDomain: "sports-tools-fc26c.firebaseapp.com",
+  projectId: "sports-tools-fc26c",
+  storageBucket: "sports-tools-fc26c.firebasestorage.app",
+  messagingSenderId: "730294504124",
+  appId: "1:730294504124:web:67aec0314f9627db745eb9"
+};
+
+// Initialize Firebase & Firestore
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+let firebaseMappings = {};
+let lastOFF = null, lastRS3 = null;
+
+// Load Mappings from Firestore
+async function loadMappingsFromFirestore() {
+    try {
+        const snapshot = await db.collection("playerMappings").get();
+        firebaseMappings = {};
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            if(data.officialName && data.rs3Name) {
+                firebaseMappings[data.officialName] = data.rs3Name;
+            }
+        });
+    } catch(err) {
+        console.error("Error loading player mappings from Firestore:", err);
+    }
+}
+
+// LOGIN
+async function doLogin(){
+    if(user.value==="OSED" && pass.value==="OSED@1234"){
+        localStorage.setItem("golfAuth","1");
+        loginBox.style.display="none";
+        main.style.display="block";
+        logoutBtn.style.display="block";
+        await loadMappingsFromFirestore();
+    } else alert("Invalid login!");
+}
+function logout(){localStorage.removeItem("golfAuth");location.reload();}
+window.onload = async () => {
+    if(localStorage.getItem("golfAuth")==="1"){
+        loginBox.style.display="none";
+        main.style.display="block";
+        logoutBtn.style.display="block";
+        await loadMappingsFromFirestore();
+    }
+}
+
+// CLEAR
+function clearOfficial(){official.value="";}
+function clearRS3(){rs3.value="";}
+function clearBoth(){clearOfficial();clearRS3();output.innerHTML="";}
+
+// 🔥 FLEXIBLE SPLIT (handles tabs, spaces, Excel online)
+function smartSplit(line){
+    if(line.includes("\t")) return line.split("\t");
+    return line.trim().split(/\s{2,}|\s+/); // fallback for spaces
+}
+
+// CLEAN NUMBER
+function cellToHole(v){
+    if(v==null) return null;
+    v=String(v).trim();
+    if(!/^\d+$/.test(v)) return null;
+    let n=Number(v);
+    return (n>=2 && n<=9)?n:null;
+}
+
+// NAME NORMALIZATION
+function normalizeNameKey(name){
+    if(!name) return "";
+    let s=name.normalize("NFD")
+        .replace(/[\u0300-\u036f]/g,"")
+        .toLowerCase()
+        .replace(/[().]/g,"")
+        .replace(/[^a-z\s]/g," ")
+        .replace(/\s+/g," ")
+        .trim();
+
+    let parts=s.split(" ");
+    const last=parts.pop();
+    const initials=parts.map(p=>p[0]).join("");
+    return last+"_"+initials;
+}
+
+function nameKeyMatch(k1,k2){
+    if(!k1 || !k2) return false;
+    const [l1,i1]=k1.split("_");
+    const [l2,i2]=k2.split("_");
+    return l1===l2 && (i1===i2 || i1.startsWith(i2) || i2.startsWith(i1));
+}
+
+// PARSE RS3
+function parseRS3(text){
+    const lines=text.split(/\n/).filter(l=>l.trim());
+    const players={};
+
+    for(const line of lines){
+        const c=smartSplit(line);
+        if(c.length < 2) continue;
+
+        const name=c[1];
+        const holes=c.slice(8,26).map(cellToHole);
+
+        while(holes.length<18) holes.push(null);
+
+        players[name]={name,holes,key:normalizeNameKey(name)};
+    }
+    return players;
+}
+
+// PARSE OFFICIAL (FIXED)
+function parseOfficial(text){
+    const lines=text.split(/\n/).filter(l=>l.trim());
+    const players={};
+
+    for(let i=1;i<lines.length;i++){
+        const c=smartSplit(lines[i]);
+        if(c.length===0) continue;
+
+        const name=c[0];
+        const holes=c.slice(1,19).map(cellToHole);
+
+        while(holes.length<18) holes.push(null);
+
+        players[name]={name,holes,key:normalizeNameKey(name)};
+    }
+    return players;
+}
+
+/* ================= FIRESTORE MAPPING IMPLEMENTATION ================= */
+
+// PLAYER MAPPING POPUP
+function openPlayerMapping(){
+    if(!lastOFF || !lastRS3){ alert("Run Compare first"); return; }
+
+    const used = new Set();
+    const off = [];
+    const rs3 = [];
+
+    for(const o in lastOFF){
+        let found = false;
+        const mapped = firebaseMappings[lastOFF[o].key];
+        if(mapped && lastRS3[mapped]){
+            used.add(mapped);
+            found = true;
+        } else {
+            for(const r in lastRS3){
+                if(used.has(r)) continue;
+                if(nameKeyMatch(lastOFF[o].key, lastRS3[r].key)){
+                    used.add(r);
+                    found = true;
+                    break;
+                }
+            }
+        }
+        if(!found) off.push(o);
+    }
+
+    for(const r in lastRS3){
+        if(!used.has(r)) rs3.push(r);
+    }
+
+    let rows = "";
+    off.forEach(o => {
+        rows += `<tr><td>${o}</td><td><select data-official="${o}" data-key="${lastOFF[o].key}">
+        <option value="">Select RS3 Player</option>
+        ${rs3.map(x => `<option value="${x}">${x}</option>`).join("")}
+        </select></td></tr>`;
+    });
+
+    document.body.insertAdjacentHTML('beforeend', `
+    <div id="mapPopup" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;">
+    <div style="background:#fff;width:900px;margin:40px auto;padding:20px;max-height:80%;overflow:auto;">
+    <h2>Player Mapping</h2>
+    <table width="100%"><tr><th>Official</th><th>RS3</th></tr>${rows}</table><br>
+    <button onclick="saveMappings()">Save</button>
+    <button onclick="document.getElementById('mapPopup').remove()">Close</button>
+    </div></div>`);
+}
+
+// SAVE MAPPINGS FROM PLAYER MAPPING POPUP
+async function saveMappings(){
+    const selects = document.querySelectorAll('#mapPopup select');
+    const savePromises = [];
+
+    selects.forEach(s => {
+        if(s.value){
+            const officialKey = s.dataset.key;
+            const rs3Name = s.value;
+            firebaseMappings[officialKey] = rs3Name;
+
+            const promise = db.collection("playerMappings").doc(officialKey).set({
+                officialName: officialKey,
+                rs3Name: rs3Name
+            }).catch(e => {
+                console.error(`Error saving mapping for ${officialKey}:`, e);
+            });
+
+            savePromises.push(promise);
+        }
+    });
+
+    try {
+        await Promise.all(savePromises);
+
+        const popup = document.getElementById('mapPopup');
+        if(popup) {
+            popup.remove();
+        }
+
+        alert('Mappings Saved');
+
+        await loadMappingsFromFirestore();
+        compare();
+    } catch(err) {
+        console.error("Error completing saveMappings execution:", err);
+    }
+}
+
+// OPEN MANAGE MAPPINGS POPUP
+async function manageMappings(){
+    await loadMappingsFromFirestore();
+    let rows = '';
+    Object.keys(firebaseMappings).forEach(k => {
+        rows += `<tr><td>${k}</td><td><input data-key="${k}" value="${firebaseMappings[k]}" style="width:95%"></td>
+        <td><button onclick="deleteMapping('${k}')">Delete</button></td></tr>`;
+    });
+
+    document.body.insertAdjacentHTML('beforeend', `
+    <div id="managePopup" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;">
+    <div style="background:#fff;width:1000px;margin:40px auto;padding:20px;max-height:80%;overflow:auto;">
+    <h2>Manage Mappings</h2>
+    <p>Saved Mappings: ${Object.keys(firebaseMappings).length}</p>
+    <table width="100%"><tr><th>Official Key</th><th>RS3 Player</th><th>Action</th></tr>${rows}</table><br>
+    <button onclick="saveManagedMappings()">Save Changes</button>
+    <button onclick="document.getElementById('managePopup').remove()">Close</button>
+    </div></div>`);
+}
+
+// SAVE MANAGED MAPPINGS
+async function saveManagedMappings(){
+    const inputs = document.querySelectorAll('#managePopup input');
+    const savePromises = [];
+
+    inputs.forEach(i => {
+        const key = i.dataset.key;
+        const val = i.value.trim();
+        if(val){
+            firebaseMappings[key] = val;
+            const promise = db.collection("playerMappings").doc(key).set({
+                officialName: key,
+                rs3Name: val
+            }).catch(e => {
+                console.error(`Error updating managed mapping for ${key}:`, e);
+            });
+            savePromises.push(promise);
+        }
+    });
+
+    try {
+        await Promise.all(savePromises);
+
+        const popup = document.getElementById('managePopup');
+        if(popup) {
+            popup.remove();
+        }
+
+        alert('Mappings Saved');
+
+        await loadMappingsFromFirestore();
+        if(lastOFF && lastRS3) {
+            compare();
+        }
+    } catch(err) {
+        console.error("Error saving managed mappings:", err);
+    }
+}
+
+// DELETE MAPPING
+async function deleteMapping(k){
+    try {
+        await db.collection("playerMappings").doc(k).delete();
+        delete firebaseMappings[k];
+
+        const popup = document.getElementById('managePopup');
+        if(popup) {
+            popup.remove();
+        }
+
+        await manageMappings();
+        if(lastOFF && lastRS3) {
+            compare();
+        }
+    } catch(e) {
+        console.error("Error deleting mapping from Firestore:", e);
+    }
+}
+
+// COMPARE
+function compare(){
+    let OFF, RS3;
+    try {
+        OFF = parseOfficial(official.value);
+        RS3 = parseRS3(rs3.value);
+        lastOFF = OFF; lastRS3 = RS3;
+    } catch(e) { return; }
+
+    let html=`<table><tr><th>Player</th>`;
+    for(let i=1;i<=18;i++) html+=`<th>H${i}</th>`;
+    html+=`<th>Status</th></tr>`;
+
+    const usedRS3=new Set();
+
+    for(const o in OFF){
+        let match=null;
+
+        // 1. Check direct Firestore custom mapping
+        const mapped = firebaseMappings[OFF[o].key];
+        if(mapped && RS3[mapped]) {
+            match = mapped;
+            usedRS3.add(match);
+        } else {
+            // 2. Fall back to automatic name matching logic
+            for(const r in RS3){
+                if(usedRS3.has(r)) continue;
+                if(nameKeyMatch(OFF[o].key,RS3[r].key)){
+                    match=r;
+                    usedRS3.add(r);
+                    break;
+                }
+            }
+        }
+
+        const O=OFF[o];
+        const R=match?RS3[match]:null;
+        let status="MATCH";
+
+        let playerCellContent = `${o}<br><span class="subName">⇔ ${match||"NO MATCH"}</span>`;
+        
+        let row=`<tr><td class="playerCell">${playerCellContent}</td>`;
+
+        for(let h=0;h<18;h++){
+            const a=O.holes[h];
+            const b=R?R.holes[h]:null;
+            let cls="ok";
+
+            if(a!=null && b==null){cls="upd";status="NEED TO UPDATE";}
+            else if(a==null && b!=null){cls="mis";status="MISMATCH";}
+            else if(a!=null && b!=null && a!==b){cls="mis";status="MISMATCH";}
+
+            row+=`<td class="${cls}">${a??"-"}|${b??"-"}</td>`;
+        }
+
+        row+=`<td class="${status==="MATCH"?"ok":status==="NEED TO UPDATE"?"upd":"mis"}">${status}</td></tr>`;
+        html+=row;
+    }
+
+    html+="</table>";
+    output.innerHTML=html;
+}
+</script>
+
+</body>
+</html>
