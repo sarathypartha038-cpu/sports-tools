@@ -33,9 +33,29 @@ td{padding:6px;border:1px solid #ccc;text-align:center;}
 .ok{background:#d6ffe0;color:#006600;}
 .mis{background:#ffe5e5;color:#990000;font-weight:bold;}
 .upd{background:#fff7b3;color:#000;}
+.totalError{
+    background:#003c8f;
+    color:#ffffff;
+    font-weight:bold;
+}
 
 .playerCell{text-align:left;font-weight:bold;}
 .subName{font-size:11px;color:#555;}
+
+.legend-box {
+    margin-top: 15px;
+    padding: 8px 12px;
+    background: #f8f9fa;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 12px;
+    display: inline-block;
+    text-align: left;
+}
+.legend-item {
+    margin-right: 15px;
+    display: inline-block;
+}
 
 #loginBox{
     width:350px;margin:100px auto;padding:20px;background:#fff;
@@ -187,11 +207,17 @@ function parseRS3(text){
         if(c.length < 2) continue;
 
         const name=c[1];
+
+        let totalScore = "-";
+        if(c[6] && c[6] !== "-" && c[6] !== "–" && /^-?\d+$/.test(c[6].trim())){
+            totalScore = Number(c[6].trim());
+        }
+
         const holes=c.slice(8,26).map(cellToHole);
 
         while(holes.length<18) holes.push(null);
 
-        players[name]={name,holes,key:normalizeNameKey(name)};
+        players[name]={name,holes,totalScore,key:normalizeNameKey(name)};
     }
     return players;
 }
@@ -393,9 +419,16 @@ function compare(){
         lastOFF = OFF; lastRS3 = RS3;
     } catch(e) { return; }
 
-    let html=`<table><tr><th>Player</th>`;
+    let html = `
+    <div class="legend-box">
+        <span class="legend-item">🟢 <b>MATCH</b> = Official and RS3 values match</span>
+        <span class="legend-item">🟡 <b>UPDATE</b> = Official contains newer scores</span>
+        <span class="legend-item">🔴 <b>HOLE</b> = Hole score mismatch</span>
+        <span class="legend-item">🔵 <b>TOTAL</b> = Total score calculation error</span>
+    </div>
+    <table><tr><th>Player</th>`;
     for(let i=1;i<=18;i++) html+=`<th>H${i}</th>`;
-    html+=`<th>Status</th></tr>`;
+    html+=`<th>TOTAL</th><th>Status</th></tr>`;
 
     const usedRS3=new Set();
 
@@ -421,7 +454,10 @@ function compare(){
 
         const O=OFF[o];
         const R=match?RS3[match]:null;
-        let status="MATCH";
+
+        let hasHoleMismatch = false;
+        let hasNeedUpdate = false;
+        let officialTotal = 0;
 
         let playerCellContent = `${o}<br><span class="subName">⇔ ${match||"NO MATCH"}</span>`;
 
@@ -430,16 +466,57 @@ function compare(){
         for(let h=0;h<18;h++){
             const a=O.holes[h];
             const b=R?R.holes[h]:null;
+
+            if(a !== null){
+                officialTotal += a;
+            }
+
             let cls="ok";
 
-            if(a!=null && b==null){cls="upd";status="NEED TO UPDATE";}
-            else if(a==null && b!=null){cls="mis";status="MISMATCH";}
-            else if(a!=null && b!=null && a!==b){cls="mis";status="MISMATCH";}
+            if(a!=null && b==null){
+                cls="upd";
+                hasNeedUpdate=true;
+            }
+            else if(a==null && b!=null){
+                cls="mis";
+                hasHoleMismatch=true;
+            }
+            else if(a!=null && b!=null && a!==b){
+                cls="mis";
+                hasHoleMismatch=true;
+            }
 
             row+=`<td class="${cls}">${a??"-"}|${b??"-"}</td>`;
         }
 
-        row+=`<td class="${status==="MATCH"?"ok":status==="NEED TO UPDATE"?"upd":"mis"}">${status}</td></tr>`;
+        const rs3Total = (R && R.totalScore !== undefined) ? R.totalScore : "-";
+
+        let status = "MATCH";
+        let statusCls = "ok";
+        let totalCls = "ok";
+
+        if(hasHoleMismatch){
+            status = "MISMATCH";
+            statusCls = "mis";
+            totalCls = "mis";
+        } else if(hasNeedUpdate){
+            status = "NEED TO UPDATE";
+            statusCls = "upd";
+            totalCls = "upd";
+        } else if(officialTotal !== rs3Total){
+            status = "TOTAL SCORE MISMATCH";
+            statusCls = "totalError";
+            totalCls = "totalError";
+        } else {
+            status = "MATCH";
+            statusCls = "ok";
+            totalCls = "ok";
+        }
+
+        let totalDisplay = `${officialTotal} | ${rs3Total}`;
+
+        row += `<td class="${totalCls}">${totalDisplay}</td>`;
+        row += `<td class="${statusCls}">${status}</td></tr>`;
         html+=row;
     }
 
