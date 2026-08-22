@@ -33,7 +33,7 @@ button:hover{ background:#005bbd; }
 .clearBtn{ background:#c00!important; }
 .clearBothBtn{ background:#c97300!important; }
 
-table{ width:100%; border-collapse:collapse; margin-top:25px; font-size:13px; }
+table{ width:100%; border-collapse:collapse; margin-top:15px; font-size:13px; }
 th{
     background:#005bbd; color:#fff; padding:6px;
     border:1px solid #333; position:sticky; top:0;
@@ -43,9 +43,29 @@ td{ padding:6px; border:1px solid #ccc; text-align:center; }
 .ok{ background:#d6ffe0; color:#006600; }
 .mis{ background:#ffe5e5; color:#990000; font-weight:bold; }
 .upd{ background:#fff7b3; }
+.totalError{
+    background:#003c8f;
+    color:#ffffff;
+    font-weight:bold;
+}
 
 .playerCell{ text-align:left; font-weight:bold; }
 .subName{ font-size:11px; color:#777; }
+
+.legend-box {
+    margin-top: 15px;
+    padding: 8px 12px;
+    background: #f8f9fa;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 12px;
+    display: inline-block;
+    text-align: left;
+}
+.legend-item {
+    margin-right: 15px;
+    display: inline-block;
+}
 
 #loginBox{
     width:350px; margin:100px auto; padding:20px;
@@ -208,11 +228,7 @@ function cellToHole(x){
     return Number(x);
 }
 
-/* ================= OFFICIAL PARSER (FIXED) ================= */
-/*
-Official format:
-Rank | Name | Score | H1..H9 | OUT | H10..H18 | IN | TOTAL | THRU
-*/
+/* ================= OFFICIAL PARSER ================= */
 function parseOfficial(text){
     const players = {};
 
@@ -229,18 +245,14 @@ function parseOfficial(text){
         const name = cols[nameIdx];
         const holes = [];
 
-        // H1 starts exactly at nameIdx + 2
         let start = nameIdx + 2;
 
-        // H1–H9
         for(let i=0;i<9;i++){
             holes.push(cellToHole(cols[start + i]));
         }
 
-        // Skip OUT column
         start = start + 9 + 1;
 
-        // H10–H18
         for(let i=0;i<9;i++){
             holes.push(cellToHole(cols[start + i]));
         }
@@ -256,6 +268,7 @@ function parseOfficial(text){
 RS3 layout:
 A = Rank
 B = Name
+G (index 6) = Total Score
 I → Z (index 8 → 25) = H1 → H18
 */
 function parseRS3(text){
@@ -265,15 +278,20 @@ function parseRS3(text){
         if(!/^\d+$/.test(c[0]) || !c[1]) return;
 
         const name = c[1];
+        
+        let totalScore = "-";
+        if(c[6] && c[6] !== "-" && c[6] !== "–" && /^-?\d+$/.test(c[6])){
+            totalScore = Number(c[6]);
+        }
+
         const holes = [];
         for(let i=8;i<=25;i++){
             holes.push(cellToHole(c[i]));
         }
-        players[name] = { name, holes };
+        players[name] = { name, holes, totalScore };
     });
     return players;
 }
-
 
 let lastOFF = null;
 let lastRS3 = null;
@@ -348,7 +366,6 @@ function openPlayerMapping(){
 
  document.body.insertAdjacentHTML('beforeend',html);
 }
-
 
 function manageMappings(){
     const mappings = loadedMappings;
@@ -431,9 +448,17 @@ function compare(){
 
     const usedRS3 = new Set();
 
-    let html = `<table><tr>
+    let html = `
+    <div class="legend-box">
+        <span class="legend-item">🟢 <b>MATCH</b> = Official and RS3 values match</span>
+        <span class="legend-item">🟡 <b>UPDATE</b> = Official contains newer scores</span>
+        <span class="legend-item">🔴 <b>HOLE</b> = Hole score mismatch</span>
+        <span class="legend-item">🔵 <b>TOTAL</b> = Total score calculation error</span>
+    </div>
+    <table><tr>
         <th>Player</th>
         ${[...Array(18)].map((_,i)=>`<th>H${i+1}</th>`).join("")}
+        <th>TOTAL</th>
         <th>Status</th></tr>`;
 
     for(const o of Object.keys(OFF).sort()){
@@ -455,39 +480,74 @@ function compare(){
 
         const O = OFF[o];
         const R = r ? RS3[r] : null;
-        let status = "MATCH";
+
+        let hasHoleMismatch = false;
+        let hasNeedUpdate = false;
+        let officialTotal = 0;
 
         let row = `<tr>
             <td class="playerCell">${o}<br>
             <span class="subName">⇔ ${r || "NO MATCH"}</span></td>`;
 
         for(let i=0;i<18;i++){
-    const a = O.holes[i] === "-" ? null : O.holes[i];     // OFFICIAL
-    const b = R ? (R.holes[i] === "-" ? null : R.holes[i]) : null; // RS3
+            const a = O.holes[i] === "-" ? null : O.holes[i];     // OFFICIAL
+            const b = R ? (R.holes[i] === "-" ? null : R.holes[i]) : null; // RS3
 
-    let cls = "ok";
+            if(a !== null){
+                officialTotal += a;
+            }
 
-    // OFFICIAL has value, RS3 missing → NEED TO UPDATE (Yellow)
-    if(a !== null && b === null){
-        cls = "upd";
-        if(status !== "MISMATCH") status = "NEED TO UPDATE";
-    }
-    // OFFICIAL missing, RS3 has value → MISMATCH (Red)
-    else if(a === null && b !== null){
-        cls = "mis";
-        status = "MISMATCH";
-    }
-    // Both present but different → MISMATCH (Red)
-    else if(a !== null && b !== null && a !== b){
-        cls = "mis";
-        status = "MISMATCH";
-    }
+            let cls = "ok";
 
-    row += `<td class="${cls}">${a ?? "-"}|${b ?? "-"}</td>`;
-}
+            // OFFICIAL has value, RS3 missing → NEED TO UPDATE (Yellow)
+            if(a !== null && b === null){
+                cls = "upd";
+                hasNeedUpdate = true;
+            }
+            // OFFICIAL missing, RS3 has value → MISMATCH (Red)
+            else if(a === null && b !== null){
+                cls = "mis";
+                hasHoleMismatch = true;
+            }
+            // Both present but different → MISMATCH (Red)
+            else if(a !== null && b !== null && a !== b){
+                cls = "mis";
+                hasHoleMismatch = true;
+            }
 
+            row += `<td class="${cls}">${a ?? "-"}|${b ?? "-"}</td>`;
+        }
 
-        row += `<td class="${status==="MATCH"?"ok":status==="NEED TO UPDATE"?"upd":"mis"}">${status}</td></tr>`;
+        const rs3Total = (R && R.totalScore !== undefined) ? R.totalScore : "-";
+
+        // Determine Status and TOTAL column styling based on Priority Rules
+        let status = "MATCH";
+        let statusCls = "ok";
+        let totalCls = "ok";
+
+        if(hasHoleMismatch){
+            status = "MISMATCH";
+            statusCls = "mis";
+            totalCls = "mis";
+        } else if(hasNeedUpdate){
+            status = "NEED TO UPDATE";
+            statusCls = "upd";
+            totalCls = "upd";
+        } else if(officialTotal != rs3Total){
+            status = "TOTAL SCORE MISMATCH";
+            statusCls = "totalError";
+            totalCls = "totalError";
+        } else {
+            status = "MATCH";
+            statusCls = "ok";
+            totalCls = "ok";
+        }
+
+        let totalDisplay = `${officialTotal} | ${rs3Total}`;
+
+        // Add TOTAL and Status cells
+        row += `<td class="${totalCls}">${totalDisplay}</td>`;
+        row += `<td class="${statusCls}">${status}</td></tr>`;
         html += row;
     }
 
